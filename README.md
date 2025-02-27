@@ -1,47 +1,111 @@
-# saveland
-bash scripts for Hyprland/GNOME to save names &amp; locations of opened GUI applications (clients) and restore script.
+# Saveland
 
-Here's an explanation of how they work:
+Saveland is a collection of bash scripts designed to save and restore window layouts across Linux desktop environments. Whether you're using Hyprland or GNOME, Saveland lets you capture and recreate your perfect desktop setup with ease.
 
-### save-windows.sh
+## Features
 
-1. Uses `wmctrl` and `xdotool` to gather information about all open windows
-2. For each window, collects:
-   - Window ID
-   - Workspace ID
-   - X and Y position
-   - Width and height
-   - Window class
-   - Window title
-   - The command that launched the window (when possible)
-3. Saves all this information to `~/.saved_windows_ubuntu` in a structured format
-4. Skips windows with no class information (like the desktop itself)
+- Save positions, sizes, and workspace information for all open GUI applications
+- Support for multiple instances of the same application
+- Works with both Hyprland and GNOME (X11) environments
+- Preserves window attributes across restarts
+- Simple command-line interface
 
-### load-windows.sh
+## Installation
 
-1. Reads window configurations from the save file
-2. For each window:
-   - Switches to the correct workspace
-   - Launches the application using the saved command
-   - Tries to identify the new window using its title or class
-   - Moves and resizes the window to match the saved position and dimensions
-3. Includes delays to ensure operations complete properly
-4. Provides feedback about the restoration process
+### Prerequisites
 
-### Installation Prerequisites:
+#### For Hyprland users:
+No additional dependencies required.
 
-Before using these scripts, you'll need to install the required tools:
-
+#### For GNOME users:
 ```bash
 sudo apt install wmctrl xdotool
 ```
 
-### Important Notes:
+### Setup
 
-1. Ubuntu/GNOME window management is different from Hyprland - these scripts use tools like wmctrl that work with X Window System
+1. Clone the repository:
+```bash
+git clone https://github.com/MAX-786/saveland.git
+```
 
-2. The script tries multiple strategies to identify the correct window after launching an application, but this can sometimes be tricky if applications don't consistently set their window properties
+2. Make the scripts executable:
+```bash
+cd saveland
+chmod +x *.sh
+```
 
-3. You might need to modify the command detection logic for specific applications
+3. Optionally, add the scripts to your PATH for easier access.
 
-4. These scripts will work best on standard Ubuntu installations running GNOME with X11. If you're using Wayland (default in newer Ubuntu versions), you might need additional tools or modifications
+## Usage
+
+### For Hyprland users:
+
+#### Save your current window layout:
+```bash
+./save-windows-hyprland.sh
+```
+This saves all window information to `~/.saved_windows`.
+
+#### Restore your window layout:
+```bash
+./load-windows-hyprland.sh
+```
+
+### For GNOME users:
+
+#### Save your current window layout:
+```bash
+./save-windows-gnore.sh
+```
+This saves all window information to `~/.saved_windows_ubuntu`.
+
+#### Restore your window layout:
+```bash
+./load-windows-gnome.sh
+```
+
+## How It Works
+
+### Hyprland Scripts
+
+#### saveworkspaces.sh
+- Uses `hyprctl` to get window information in JSON format
+- Extracts class, position, size, and workspace data for each window
+- Stores data in a structured format in `~/.saved_windows`
+
+#### loadworkspaces.sh
+- Reads the saved window configurations
+- Switches to appropriate workspaces
+- Launches applications with the correct size and position
+
+### GNOME Scripts
+
+#### save-windows.sh
+- Uses `wmctrl` and `xdotool` to gather window information
+- Collects window ID, workspace, position, size, class, title, and launch command
+- Saves data to `~/.saved_windows_ubuntu`
+
+#### load-windows.sh
+- Reads window configurations from the save file
+- Switches to the correct workspace for each window
+- Launches applications and repositions/resizes them
+
+## Limitations
+
+- The GNOME scripts work best with X11 and may have limited functionality with Wayland
+- Some applications may not restore perfectly if they manage their own window placement
+- Command detection might need tweaking for specific applications
+- The scripts currently don't handle window states like minimized/maximized
+
+## Contributing
+
+Contributions are welcome! Please check out our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by an original script for saving Kitty terminal windows in Hyprland (found that somewhere in reddit)
