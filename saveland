@@ -2,7 +2,7 @@
 # saveland - Main executable script for the Saveland window management tool
 
 # Set version
-VERSION="1.0.0"
+VERSION="0.0.1"
 
 # Configuration
 CONFIG_DIR="$HOME/.config/saveland"

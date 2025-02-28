@@ -1,7 +1,7 @@
-# Maintainer: Your Name <your.email@example.com>
+# Maintainer: Mohammad K. Hussain <hussainmohammad328@gmail.com>
 
 pkgname=saveland
-pkgver=1.0.0
+pkgver=0.0.1
 pkgrel=1
 pkgdesc="Save and restore window layouts across Linux desktop environments"
 arch=('any')
@@ -10,8 +10,8 @@ license=('MIT')
 depends=('bash' 'jq')
 optdepends=('wmctrl: For GNOME support'
             'xdotool: For GNOME support')
+provides=('saveland')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/MAX-786/$pkgname/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')
 
 package() {
   cd "$pkgname-$pkgver"
