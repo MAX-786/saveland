@@ -1,0 +1,27 @@
+Source: saveland
+Section: utils
+Priority: optional
+Maintainer: Mohammad K. Hussain <hussainmohammad328@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.5.1
+Homepage: https://github.com/MAX-786/saveland
+Vcs-Browser: https://github.com/MAX-786/saveland
+Vcs-Git: https://github.com/MAX-786/saveland.git
+Rules-Requires-Root: no
+
+Package: saveland
+Architecture: all
+Depends: ${misc:Depends}, bash (>= 4.0), jq
+Recommends: wmctrl, xdotool
+Description: Save and restore window layouts across Linux desktop environments
+ Saveland is a utility for capturing and restoring window positions,
+ sizes, and workspace information across different desktop environments.
+ .
+ It allows users to save their desktop setup and recreate it later with
+ a single command. Currently supports Hyprland and GNOME (X11) environments.
+ .
+ Features:
+  * Save window layouts across multiple workspaces
+  * Restore applications with their original size and position
+  * Support for multiple instances of the same application
+  * Automatic desktop environment detection

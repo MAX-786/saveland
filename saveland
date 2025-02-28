@@ -1,0 +1,426 @@
+#!/bin/bash
+# saveland - Main executable script for the Saveland window management tool
+
+# Set version
+VERSION="1.0.0"
+
+# Configuration
+CONFIG_DIR="$HOME/.config/saveland"
+SAVE_FILE_HYPRLAND="$HOME/.config/saveland/windows_hyprland"
+SAVE_FILE_GNOME="$HOME/.config/saveland/windows_gnome"
+
+# Create config directory if it doesn't exist
+mkdir -p "$CONFIG_DIR"
+
+# Function to display help information
+show_help() {
+    echo "Saveland - Save and restore window layouts across Linux desktop environments"
+    echo ""
+    echo "Usage: saveland [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --save               Save current window layout"
+    echo "  --load               Restore saved window layout"
+    echo "  --list               List saved window layouts"
+    echo "  --version, -v        Display version information"
+    echo "  --help, -h           Display this help message"
+    echo ""
+    echo "Examples:"
+    echo "  saveland --save      Save current window layout"
+    echo "  saveland --load      Restore saved window layout"
+    echo ""
+}
+
+# Function to display version information
+show_version() {
+    echo "Saveland version $VERSION"
+}
+
+# Detect desktop environment
+detect_environment() {
+    if command -v hyprctl &> /dev/null; then
+        echo "hyprland"
+    elif [ "$XDG_CURRENT_DESKTOP" = "GNOME" ] || [ "$DESKTOP_SESSION" = "gnome" ] || [ "$DESKTOP_SESSION" = "ubuntu" ]; then
+        echo "gnome"
+    else
+        echo "unknown"
+    fi
+}
+
+# Save windows for Hyprland
+save_hyprland() {
+    echo "Saving Hyprland window layout..."
+    
+    # Get all clients/windows from hyprctl in JSON format
+    all_windows=$(hyprctl -j clients)
+
+    # Create a temporary file to store the window data
+    temp_file=$(mktemp)
+
+    # Process the JSON data to extract relevant information
+    echo "$all_windows" | jq -r '.[] | {
+        class: .class,
+        title: .title,
+        workspace: .workspace.id,
+        at: .at,
+        size: .size
+    }' | jq -s '.' > "$temp_file"
+
+    # Check if we got any windows
+    window_count=$(jq 'length' "$temp_file")
+
+    if [ "$window_count" -gt 0 ]; then
+        # Create the save file
+        # Process the data into a format that can be used to restore windows
+        jq -r '.[] | "workspace=\(.workspace) class=\(.class) title=\(.title|@sh) move=\(.at[0]),\(.at[1]) size=\(.size[0]),\(.size[1])"' "$temp_file" > "$SAVE_FILE_HYPRLAND"
+        
+        echo "Saved $window_count windows to $SAVE_FILE_HYPRLAND"
+    else
+        echo "No windows found to save"
+    fi
+
+    # Clean up
+    rm "$temp_file"
+}
+
+# Load windows for Hyprland
+load_hyprland() {
+    if [ ! -f "$SAVE_FILE_HYPRLAND" ]; then
+        echo "No saved window configuration found at $SAVE_FILE_HYPRLAND"
+        exit 1
+    fi
+
+    echo "Loading Hyprland window layout..."
+
+    # Function to sanitize window titles for the command line
+    sanitize_title() {
+        echo "$1" | sed 's/"/\\"/g'
+    }
+
+    # Read each line from the save file
+    while IFS= read -r line; do
+        # Extract the components
+        workspace=$(echo "$line" | grep -o 'workspace=[0-9]*' | cut -d= -f2)
+        class=$(echo "$line" | grep -o 'class=[^ ]*' | cut -d= -f2)
+        title_raw=$(echo "$line" | grep -o 'title=.*move=' | sed 's/title=//; s/ move=$//')
+        title=$(eval echo "$title_raw") # Unescape the title
+        position=$(echo "$line" | grep -o 'move=[^ ]*' | cut -d= -f2)
+        size=$(echo "$line" | grep -o 'size=[^ ]*' | cut -d= -f2)
+        
+        # Switch to the workspace first
+        hyprctl dispatch workspace "$workspace"
+        
+        # Wait a moment to ensure the workspace switch completes
+        sleep 0.1
+        
+        # Launch the application with its class, position, and size
+        app_name=$(echo "$class" | tr '[:upper:]' '[:lower:]')
+        
+        # Create a sanitized title for matching
+        sanitized_title=$(sanitize_title "$title")
+        
+        # Launch the application with specific position and size
+        hyprctl dispatch exec "[workspace $workspace;move $position;size $size] $app_name"
+        
+        echo "Launched $class on workspace $workspace with position $position and size $size"
+        
+        # Small delay between launching applications to prevent overwhelming the system
+        sleep 0.5
+        
+    done < "$SAVE_FILE_HYPRLAND"
+
+    echo "Window restoration complete"
+}
+
+# Save windows for GNOME
+save_gnome() {
+    echo "Saving GNOME window layout..."
+    
+    # Check if needed dependencies are installed
+    if ! command -v wmctrl &> /dev/null; then
+        echo "wmctrl is not installed. Please install it with: sudo apt install wmctrl"
+        exit 1
+    fi
+
+    if ! command -v xdotool &> /dev/null; then
+        echo "xdotool is not installed. Please install it with: sudo apt install xdotool"
+        exit 1
+    fi
+
+    # Create the save file
+    > "$SAVE_FILE_GNOME"  # Clear file contents
+
+    # Get current workspace
+    current_workspace=$(wmctrl -d | grep '*' | cut -d ' ' -f1)
+
+    # Get all windows
+    window_list=$(wmctrl -l -G)
+
+    # Process each window
+    while read -r window_line; do
+        window_id=$(echo "$window_line" | awk '{print $1}')
+        workspace_id=$(echo "$window_line" | awk '{print $2}')
+        pos_x=$(echo "$window_line" | awk '{print $3}')
+        pos_y=$(echo "$window_line" | awk '{print $4}')
+        width=$(echo "$window_line" | awk '{print $5}')
+        height=$(echo "$window_line" | awk '{print $6}')
+        window_class=$(xprop -id "$window_id" WM_CLASS 2>/dev/null | sed 's/.*"\(.*\)".*/\1/')
+        window_title=$(echo "$window_line" | cut -d ' ' -f8-)
+        
+        # Skip windows with no class (like the desktop)
+        if [ -z "$window_class" ]; then
+            continue
+        fi
+        
+        # Get the command that started this window (best effort)
+        pid=$(xdotool getwindowpid "$window_id" 2>/dev/null)
+        cmd=""
+        if [ -n "$pid" ]; then
+            cmd=$(ps -p "$pid" -o cmd= 2>/dev/null || echo "")
+        fi
+        
+        # If we couldn't get the command, use the class as a fallback
+        if [ -z "$cmd" ]; then
+            cmd=$(echo "$window_class" | tr '[:upper:]' '[:lower:]')
+        fi
+        
+        # Write to save file
+        echo "workspace=$workspace_id class=$window_class title=$(printf '%q' "$window_title") command=$(printf '%q' "$cmd") position=$pos_x,$pos_y size=$width,$height" >> "$SAVE_FILE_GNOME"
+        
+    done <<< "$window_list"
+
+    # Count saved windows
+    window_count=$(wc -l < "$SAVE_FILE_GNOME")
+
+    echo "Saved $window_count windows to $SAVE_FILE_GNOME"
+}
+
+# Load windows for GNOME
+load_gnome() {
+    echo "Loading GNOME window layout..."
+    
+    # Check if needed dependencies are installed
+    if ! command -v wmctrl &> /dev/null; then
+        echo "wmctrl is not installed. Please install it with: sudo apt install wmctrl"
+        exit 1
+    fi
+
+    if ! command -v xdotool &> /dev/null; then
+        echo "xdotool is not installed. Please install it with: sudo apt install xdotool"
+        exit 1
+    fi
+
+    if [ ! -f "$SAVE_FILE_GNOME" ]; then
+        echo "No saved window configuration found at $SAVE_FILE_GNOME"
+        exit 1
+    fi
+
+    # Function to switch to a specific workspace
+    switch_workspace() {
+        local workspace=$1
+        
+        # Skip invalid workspace values
+        if [[ "$workspace" == "-1" ]]; then
+            echo "Skipping invalid workspace -1"
+            return
+        fi
+        
+        # Get number of workspaces
+        local num_workspaces=$(wmctrl -d | wc -l)
+        
+        # Verify workspace is valid
+        if (( workspace >= 0 && workspace < num_workspaces )); then
+            wmctrl -s "$workspace"
+            sleep 0.5  # Allow time for the workspace switch
+        else
+            echo "Warning: Workspace $workspace is out of range (0-$((num_workspaces-1)))"
+            # Default to workspace 0
+            wmctrl -s 0
+            sleep 0.5
+        fi
+    }
+
+    # Function to launch an application with special handling for certain apps
+    launch_application() {
+        local command="$1"
+        local class="$2"
+        
+        # Special handling for common applications
+        if [[ "$class" == "Gnome-terminal" ]]; then
+            gnome-terminal &
+            return $!
+        elif [[ "$class" == "Firefox" || "$class" == "firefox" ]]; then
+            firefox &
+            return $!
+        elif [[ "$class" == "Brave" || "$class" == "brave-browser" ]]; then
+            brave &
+            return $!
+        elif [[ "$class" == "Nautilus" || "$class" == "Files" ]]; then
+            nautilus &
+            return $!
+        fi
+        
+        # Default launching method
+        if [[ "$command" == *"/"* ]]; then
+            # It's a path, execute directly
+            eval "$command" &
+        else
+            # Try to launch the command
+            $command &
+        fi
+        
+        return $!
+    }
+
+    # Read each line from the save file
+    while IFS= read -r line; do
+        # Extract the components
+        workspace=$(echo "$line" | grep -o 'workspace=[^ ]*' | cut -d= -f2)
+        class=$(echo "$line" | grep -o 'class=[^ ]*' | cut -d= -f2)
+        title_raw=$(echo "$line" | grep -o 'title=.*command=' | sed 's/title=//; s/ command=$//')
+        title=$(eval echo "$title_raw") # Unescape the title
+        command_raw=$(echo "$line" | grep -o 'command=.*position=' | sed 's/command=//; s/ position=$//')
+        command=$(eval echo "$command_raw") # Unescape the command
+        position=$(echo "$line" | grep -o 'position=[^ ]*' | cut -d= -f2)
+        size=$(echo "$line" | grep -o 'size=[^ ]*' | cut -d= -f2)
+        
+        # Extract X, Y coordinates and width, height
+        pos_x=$(echo "$position" | cut -d, -f1)
+        pos_y=$(echo "$position" | cut -d, -f2)
+        width=$(echo "$size" | cut -d, -f1)
+        height=$(echo "$size" | cut -d, -f2)
+
+        # Fix workspace if invalid
+        if [[ "$workspace" == "-1" ]]; then
+            workspace=0
+        fi
+
+        # Switch to the workspace first
+        switch_workspace "$workspace"
+        
+        # Launch the application using our special function
+        launch_application "$command" "$class"
+        app_pid=$?
+        
+        # Wait for the application to start
+        sleep 2
+        
+        # Try to find the window by title and/or class
+        window_id=""
+        
+        # First try by class
+        for attempt in {1..5}; do
+            window_id=$(xdotool search --class "$class" 2>/dev/null | head -n 1)
+            
+            if [ -n "$window_id" ]; then
+                break
+            fi
+            
+            # If we can't find by class, try by title (partial match)
+            window_id=$(wmctrl -l | grep -i "$title" | head -n 1 | awk '{print $1}')
+            
+            if [ -n "$window_id" ]; then
+                break
+            fi
+            
+            sleep 1
+        done
+        
+        # If we found a window, move and resize it
+        if [ -n "$window_id" ]; then
+            # Use xdotool for more reliable window manipulation
+            xdotool windowsize "$window_id" "$width" "$height"
+            xdotool windowmove "$window_id" "$pos_x" "$pos_y"
+            
+            # Activate the window (bring to front)
+            wmctrl -i -a "$window_id"
+            
+            echo "Restored window: $class ($title) to workspace $workspace at position $pos_x,$pos_y with size $width×$height"
+        else
+            echo "Could not find window for $class ($title) after launch"
+        fi
+        
+        # Small delay between launching applications
+        sleep 1
+        
+    done < "$SAVE_FILE_GNOME"
+
+    echo "Window restoration complete"
+}
+
+# Function to list saved layouts
+list_layouts() {
+    echo "Saved window layouts:"
+    echo ""
+    
+    if [ -f "$SAVE_FILE_HYPRLAND" ]; then
+        hyprland_count=$(wc -l < "$SAVE_FILE_HYPRLAND")
+        echo "Hyprland layout: $hyprland_count windows"
+    else
+        echo "No Hyprland layout saved"
+    fi
+    
+    if [ -f "$SAVE_FILE_GNOME" ]; then
+        gnome_count=$(wc -l < "$SAVE_FILE_GNOME")
+        echo "GNOME layout: $gnome_count windows"
+    else
+        echo "No GNOME layout saved"
+    fi
+}
+
+# Main execution starts here
+# If no arguments provided, show help
+if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+fi
+
+# Process command line arguments
+case "$1" in
+    --save)
+        env=$(detect_environment)
+        case "$env" in
+            hyprland)
+                save_hyprland
+                ;;
+            gnome)
+                save_gnome
+                ;;
+            *)
+                echo "Unsupported desktop environment. Currently only Hyprland and GNOME are supported."
+                exit 1
+                ;;
+        esac
+        ;;
+    --load)
+        env=$(detect_environment)
+        case "$env" in
+            hyprland)
+                load_hyprland
+                ;;
+            gnome)
+                load_gnome
+                ;;
+            *)
+                echo "Unsupported desktop environment. Currently only Hyprland and GNOME are supported."
+                exit 1
+                ;;
+        esac
+        ;;
+    --list)
+        list_layouts
+        ;;
+    --version|-v)
+        show_version
+        ;;
+    --help|-h)
+        show_help
+        ;;
+    *)
+        echo "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
+esac
+
+exit 0

@@ -1,6 +1,6 @@
 # Saveland
 
-Saveland is a collection of bash scripts designed to save and restore window layouts across Linux desktop environments. Whether you're using Hyprland or GNOME, Saveland lets you capture and recreate your perfect desktop setup with ease.
+Saveland is a lightweight utility for saving and restoring window layouts across Linux desktop environments. Whether you're using Hyprland or GNOME, Saveland lets you capture and recreate your perfect desktop setup with a single command.
 
 ## Features
 
@@ -8,95 +8,72 @@ Saveland is a collection of bash scripts designed to save and restore window lay
 - Support for multiple instances of the same application
 - Works with both Hyprland and GNOME (X11) environments
 - Preserves window attributes across restarts
+- Automatic desktop environment detection
 - Simple command-line interface
 
 ## Installation
 
-### Prerequisites
+See [INSTALL.md](INSTALL.md) for detailed installation instructions for different Linux distributions.
 
-#### For Hyprland users:
-No additional dependencies required.
+### Quick Install
 
-#### For GNOME users:
+#### From source:
 ```bash
-sudo apt install wmctrl xdotool
+sudo make install
 ```
 
-### Setup
-
-1. Clone the repository:
+#### For Debian/Ubuntu:
 ```bash
-git clone https://github.com/MAX-786/saveland.git
+sudo apt install ./saveland_1.0.0_all.deb
 ```
 
-2. Make the scripts executable:
+#### For Arch Linux:
 ```bash
-cd saveland
-chmod +x *.sh
+yay -S saveland
 ```
-
-3. Optionally, add the scripts to your PATH for easier access.
 
 ## Usage
 
-### For Hyprland users:
+Saveland automatically detects your desktop environment and applies the appropriate method.
 
-#### Save your current window layout:
+### Save your current window layout:
 ```bash
-./save-windows-hyprland.sh
-```
-This saves all window information to `~/.saved_windows`.
-
-#### Restore your window layout:
-```bash
-./load-windows-hyprland.sh
+saveland --save
 ```
 
-### For GNOME users:
-
-#### Save your current window layout:
+### Restore your saved window layout:
 ```bash
-./save-windows-gnore.sh
+saveland --load
 ```
-This saves all window information to `~/.saved_windows_ubuntu`.
 
-#### Restore your window layout:
+### List saved layouts:
 ```bash
-./load-windows-gnome.sh
+saveland --list
+```
+
+### Show help:
+```bash
+saveland --help
 ```
 
 ## How It Works
 
-### Hyprland Scripts
+Saveland detects your desktop environment and uses the appropriate method to save and restore windows:
 
-#### saveworkspaces.sh
-- Uses `hyprctl` to get window information in JSON format
-- Extracts class, position, size, and workspace data for each window
-- Stores data in a structured format in `~/.saved_windows`
+### For Hyprland:
+- Uses the `hyprctl` JSON interface to get and set window information
+- Saves workspace ID, window class, position, and size
 
-#### loadworkspaces.sh
-- Reads the saved window configurations
-- Switches to appropriate workspaces
-- Launches applications with the correct size and position
-
-### GNOME Scripts
-
-#### save-windows.sh
-- Uses `wmctrl` and `xdotool` to gather window information
-- Collects window ID, workspace, position, size, class, title, and launch command
-- Saves data to `~/.saved_windows_ubuntu`
-
-#### load-windows.sh
-- Reads window configurations from the save file
-- Switches to the correct workspace for each window
-- Launches applications and repositions/resizes them
+### For GNOME (X11):
+- Uses `wmctrl` and `xdotool` to manage windows
+- Captures window class, title, command, workspace, position, and size
+- Handles special cases for common applications
 
 ## Limitations
 
-- The GNOME scripts work best with X11 and may have limited functionality with Wayland
+- GNOME support works best with X11 and may have limited functionality with Wayland
 - Some applications may not restore perfectly if they manage their own window placement
-- Command detection might need tweaking for specific applications
-- The scripts currently don't handle window states like minimized/maximized
+- The script cannot save/restore window states like minimized/maximized
 
 ## Contributing
 
