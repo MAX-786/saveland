@@ -17,24 +17,24 @@ See [INSTALL.md](INSTALL.md) for detailed installation instructions for differen
 
 ### Quick Install
 
-#### From source:
-```bash
-sudo make install
-```
-
-#### For Debian/Ubuntu:
-```bash
-sudo apt install ./saveland_1.0.0_all.deb
-```
-
 #### For Arch Linux:
 ```bash
 yay -S saveland
 ```
 
+#### From source:
+```bash
+sudo make install
+```
+
+#### For Debian/Ubuntu (under development) :
+```bash
+sudo apt install saveland
+```
+
 ## Usage
 
-Saveland automatically detects your desktop environment and applies the appropriate method.
+See [USER_MANUAL.md](USER_MANUAL.md) for detailed guide.
 
 ### Save your current window layout:
 ```bash
@@ -43,7 +43,7 @@ saveland --save
 
 ### Restore your saved window layout:
 ```bash
-saveland --load
+saveland --restore
 ```
 
 ### List saved layouts:

@@ -1,9 +1,9 @@
 # Maintainer: Mohammad K. Hussain <hussainmohammad328@gmail.com>
 
 pkgname=saveland
-pkgver=0.0.1
+pkgver=0.1.0
 pkgrel=1
-pkgdesc="Save and restore window layouts across Linux desktop environments"
+pkgdesc="Save and restore window layouts in Hyprland"
 arch=('any')
 url="https://github.com/MAX-786/saveland"
 license=('MIT')
