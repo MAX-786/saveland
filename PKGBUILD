@@ -23,3 +23,4 @@ package() {
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
+sha256sums=('d1fadb4c21c23b820b6690882e5c812c4b2985f51ff19762a4b2f8babfd0ba34')

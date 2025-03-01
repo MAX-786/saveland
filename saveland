@@ -2,15 +2,66 @@
 # saveland - Main executable script for the Saveland window management tool
 
 # Set version
-VERSION="0.0.1"
+VERSION="0.1.0"
 
 # Configuration
 CONFIG_DIR="$HOME/.config/saveland"
-SAVE_FILE_HYPRLAND="$HOME/.config/saveland/windows_hyprland"
-SAVE_FILE_GNOME="$HOME/.config/saveland/windows_gnome"
+SAVE_FILE_HYPRLAND="$CONFIG_DIR/windows_hyprland"
+SAVE_FILE_GNOME="$CONFIG_DIR/windows_gnome"
+CONFIG_FILE="$CONFIG_DIR/config"
+
+# Default configuration values
+DEFAULT_LAUNCH_DELAY=0.5
+DEFAULT_RESTORE_DELAY=2
+DEFAULT_FORMAT="compact"
+DEFAULT_BACKUP=true
+DEFAULT_MAX_BACKUPS=5
 
 # Create config directory if it doesn't exist
 mkdir -p "$CONFIG_DIR"
+
+# Create default config file if it doesn't exist
+create_default_config() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        cat > "$CONFIG_FILE" << EOL
+# Saveland Configuration File
+
+# Delay in seconds between launching applications (default: 0.5)
+LAUNCH_DELAY=$DEFAULT_LAUNCH_DELAY
+
+# Delay in seconds to wait for an application to start before positioning (default: 2)
+RESTORE_DELAY=$DEFAULT_RESTORE_DELAY
+
+# Display format for list command: 'compact' or 'detailed' (default: compact)
+LIST_FORMAT=$DEFAULT_FORMAT
+
+# Whether to create backups of layouts when saving (default: true)
+CREATE_BACKUPS=$DEFAULT_BACKUP
+
+# Maximum number of backups to keep (default: 5)
+MAX_BACKUPS=$DEFAULT_MAX_BACKUPS
+EOL
+        echo "Created default configuration file at $CONFIG_FILE"
+    fi
+}
+
+# Load configuration
+load_config() {
+    if [ -f "$CONFIG_FILE" ]; then
+        # Source the config file
+        source "$CONFIG_FILE"
+    else
+        create_default_config
+        source "$CONFIG_FILE"
+    fi
+
+    # Ensure all config values have defaults if not set in config file
+    LAUNCH_DELAY=${LAUNCH_DELAY:-$DEFAULT_LAUNCH_DELAY}
+    RESTORE_DELAY=${RESTORE_DELAY:-$DEFAULT_RESTORE_DELAY}
+    LIST_FORMAT=${LIST_FORMAT:-$DEFAULT_FORMAT}
+    CREATE_BACKUPS=${CREATE_BACKUPS:-$DEFAULT_BACKUP}
+    MAX_BACKUPS=${MAX_BACKUPS:-$DEFAULT_MAX_BACKUPS}
+}
 
 # Function to display help information
 show_help() {
@@ -19,21 +70,134 @@ show_help() {
     echo "Usage: saveland [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --save               Save current window layout"
-    echo "  --load               Restore saved window layout"
-    echo "  --list               List saved window layouts"
-    echo "  --version, -v        Display version information"
-    echo "  --help, -h           Display this help message"
+    echo "  --save, -s             Save current window layout"
+    echo "  --restore, -r          Restore saved window layout (replaces --load)"
+    echo "  --list, -l             List saved window layouts (basic information)"
+    echo "  --list --all, -l -a    List all details of saved window layouts"
+    echo "  --config               Edit configuration interactively"
+    echo "  --config --help, --config -h"
+    echo "                         Show configuration help"
+    echo "  --version, -v          Display version information"
+    echo "  --help, -h             Display this help message"
     echo ""
     echo "Examples:"
-    echo "  saveland --save      Save current window layout"
-    echo "  saveland --load      Restore saved window layout"
+    echo "  saveland -s            Save current window layout"
+    echo "  saveland -r            Restore saved window layout"
+    echo "  saveland -l -a         List detailed information about saved layouts"
+    echo "  saveland --config      Edit configuration interactively"
+    echo ""
+}
+
+# Function to display configuration help
+show_config_help() {
+    echo "Saveland Configuration Help"
+    echo ""
+    echo "Configuration file location: $CONFIG_FILE"
+    echo ""
+    echo "Configuration options:"
+    echo "  LAUNCH_DELAY            Delay in seconds between launching applications"
+    echo "                          Default: $DEFAULT_LAUNCH_DELAY"
+    echo ""
+    echo "  RESTORE_DELAY           Delay in seconds to wait for an application to start"
+    echo "                          before positioning"
+    echo "                          Default: $DEFAULT_RESTORE_DELAY"
+    echo ""
+    echo "  LIST_FORMAT             Display format for list command: 'compact' or 'detailed'"
+    echo "                          Default: $DEFAULT_FORMAT"
+    echo ""
+    echo "  CREATE_BACKUPS          Whether to create backups of layouts when saving"
+    echo "                          Values: true, false"
+    echo "                          Default: $DEFAULT_BACKUP"
+    echo ""
+    echo "  MAX_BACKUPS             Maximum number of backups to keep"
+    echo "                          Default: $DEFAULT_MAX_BACKUPS"
+    echo ""
+    echo "To edit configuration:"
+    echo "  saveland --config       Interactive configuration editor"
+    echo ""
+    echo "Manual editing:"
+    echo "  You can directly edit the configuration file at $CONFIG_FILE"
+    echo "  After editing, changes will be applied immediately to next saveland command"
     echo ""
 }
 
 # Function to display version information
 show_version() {
     echo "Saveland version $VERSION"
+}
+
+# Function to edit configuration interactively
+edit_config() {
+    # Make sure config file exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        create_default_config
+    fi
+    
+    # Load current settings
+    load_config
+    
+    echo "Saveland Configuration Editor"
+    echo "----------------------------"
+    echo "Press Enter to keep current value, or enter a new value."
+    echo ""
+    
+    # Function to get user input with default value
+    get_input() {
+        local prompt="$1"
+        local current="$2"
+        local input
+        
+        read -p "$prompt [$current]: " input
+        if [ -z "$input" ]; then
+            echo "$current"
+        else
+            echo "$input"
+        fi
+    }
+    
+    # Get new values
+    new_launch_delay=$(get_input "Launch delay in seconds" "$LAUNCH_DELAY")
+    new_restore_delay=$(get_input "Restore delay in seconds" "$RESTORE_DELAY")
+    
+    # For LIST_FORMAT, make it a choice
+    echo "List format options: 'compact' or 'detailed'"
+    new_list_format=$(get_input "List format" "$LIST_FORMAT")
+    
+    # For CREATE_BACKUPS, only accept true or false
+    while true; do
+        new_create_backups=$(get_input "Create backups (true/false)" "$CREATE_BACKUPS")
+        if [ "$new_create_backups" = "true" ] || [ "$new_create_backups" = "false" ]; then
+            break
+        fi
+        echo "Error: Value must be 'true' or 'false'"
+    done
+    
+    new_max_backups=$(get_input "Maximum number of backups" "$MAX_BACKUPS")
+    
+    # Update the config file
+    cat > "$CONFIG_FILE" << EOL
+# Saveland Configuration File
+# Last modified: $(date)
+
+# Delay in seconds between launching applications
+LAUNCH_DELAY=$new_launch_delay
+
+# Delay in seconds to wait for an application to start before positioning
+RESTORE_DELAY=$new_restore_delay
+
+# Display format for list command: 'compact' or 'detailed'
+LIST_FORMAT=$new_list_format
+
+# Whether to create backups of layouts when saving
+CREATE_BACKUPS=$new_create_backups
+
+# Maximum number of backups to keep
+MAX_BACKUPS=$new_max_backups
+EOL
+    
+    echo ""
+    echo "Configuration updated successfully!"
+    echo "New settings have been saved to $CONFIG_FILE"
 }
 
 # Detect desktop environment
@@ -47,9 +211,47 @@ detect_environment() {
     fi
 }
 
+# Create backup of window layout file
+create_backup() {
+    local save_file="$1"
+    
+    # Check if the file exists
+    if [ ! -f "$save_file" ]; then
+        return
+    fi
+    
+    # Check if backups are enabled
+    if [ "$CREATE_BACKUPS" = "true" ]; then
+        local timestamp=$(date +"%Y%m%d_%H%M%S")
+        local backup_file="${save_file}_backup_${timestamp}"
+        
+        # Create the backup
+        cp "$save_file" "$backup_file"
+        
+        echo "Created backup at $backup_file"
+        
+        # Clean up old backups if we have too many
+        if [ "$MAX_BACKUPS" -gt 0 ]; then
+            local prefix="${save_file}_backup_"
+            local backup_count=$(ls -1 "${prefix}"* 2>/dev/null | wc -l)
+            
+            if [ "$backup_count" -gt "$MAX_BACKUPS" ]; then
+                # Delete oldest backups
+                ls -1t "${prefix}"* | tail -n $(( backup_count - MAX_BACKUPS )) | xargs rm
+                echo "Cleaned up old backups, keeping $MAX_BACKUPS most recent"
+            fi
+        fi
+    fi
+}
+
 # Save windows for Hyprland
 save_hyprland() {
     echo "Saving Hyprland window layout..."
+    
+    # Create backup of existing save file
+    if [ -f "$SAVE_FILE_HYPRLAND" ]; then
+        create_backup "$SAVE_FILE_HYPRLAND"
+    fi
     
     # Get all clients/windows from hyprctl in JSON format
     all_windows=$(hyprctl -j clients)
@@ -125,7 +327,7 @@ load_hyprland() {
         echo "Launched $class on workspace $workspace with position $position and size $size"
         
         # Small delay between launching applications to prevent overwhelming the system
-        sleep 0.5
+        sleep "$LAUNCH_DELAY"
         
     done < "$SAVE_FILE_HYPRLAND"
 
@@ -135,6 +337,11 @@ load_hyprland() {
 # Save windows for GNOME
 save_gnome() {
     echo "Saving GNOME window layout..."
+    
+    # Create backup of existing save file
+    if [ -f "$SAVE_FILE_GNOME" ]; then
+        create_backup "$SAVE_FILE_GNOME"
+    fi
     
     # Check if needed dependencies are installed
     if ! command -v wmctrl &> /dev/null; then
@@ -303,7 +510,7 @@ load_gnome() {
         app_pid=$?
         
         # Wait for the application to start
-        sleep 2
+        sleep "$RESTORE_DELAY"
         
         # Try to find the window by title and/or class
         window_id=""
@@ -341,15 +548,15 @@ load_gnome() {
         fi
         
         # Small delay between launching applications
-        sleep 1
+        sleep "$LAUNCH_DELAY"
         
     done < "$SAVE_FILE_GNOME"
 
     echo "Window restoration complete"
 }
 
-# Function to list saved layouts
-list_layouts() {
+# Function to list saved layouts (basic info)
+list_layouts_basic() {
     echo "Saved window layouts:"
     echo ""
     
@@ -366,9 +573,113 @@ list_layouts() {
     else
         echo "No GNOME layout saved"
     fi
+    
+    # List backup files if they exist
+    echo ""
+    echo "Available backups:"
+    
+    local hyprland_backups=$(ls -1 "${SAVE_FILE_HYPRLAND}_backup_"* 2>/dev/null | wc -l)
+    if [ "$hyprland_backups" -gt 0 ]; then
+        echo "Hyprland backups: $hyprland_backups"
+    else
+        echo "No Hyprland backups"
+    fi
+    
+    local gnome_backups=$(ls -1 "${SAVE_FILE_GNOME}_backup_"* 2>/dev/null | wc -l)
+    if [ "$gnome_backups" -gt 0 ]; then
+        echo "GNOME backups: $gnome_backups"
+    else
+        echo "No GNOME backups"
+    fi
+}
+
+# Function to list all details about saved layouts
+list_layouts_detailed() {
+    echo "Detailed window layout information:"
+    echo "=================================="
+    
+    # Function to print a nicely formatted table row
+    print_table_row() {
+        printf "| %-20s | %-10s | %-10s | %-40s |\n" "$1" "$2" "$3" "$4"
+    }
+    
+    # Function to print a divider line
+    print_divider() {
+        printf "+----------------------+------------+------------+------------------------------------------+\n"
+    }
+    
+    # Format and display Hyprland layout
+    if [ -f "$SAVE_FILE_HYPRLAND" ]; then
+        echo ""
+        echo "HYPRLAND LAYOUT:"
+        echo ""
+        print_divider
+        print_table_row "Window Class" "Workspace" "Size" "Title"
+        print_divider
+        
+        while IFS= read -r line; do
+            # Extract data from layout file
+            class=$(echo "$line" | grep -o 'class=[^ ]*' | cut -d= -f2)
+            workspace=$(echo "$line" | grep -o 'workspace=[0-9]*' | cut -d= -f2)
+            size=$(echo "$line" | grep -o 'size=[^ ]*' | cut -d= -f2)
+            title_raw=$(echo "$line" | grep -o 'title=.*move=' | sed 's/title=//; s/ move=$//')
+            title=$(eval echo "$title_raw")
+            
+            # Truncate title if too long
+            if [ ${#title} -gt 38 ]; then
+                title="${title:0:35}..."
+            fi
+            
+            print_table_row "$class" "$workspace" "$size" "$title"
+        done < "$SAVE_FILE_HYPRLAND"
+        
+        print_divider
+        echo ""
+    else
+        echo ""
+        echo "No Hyprland layout saved"
+        echo ""
+    fi
+    
+    # Format and display GNOME layout
+    if [ -f "$SAVE_FILE_GNOME" ]; then
+        echo ""
+        echo "GNOME LAYOUT:"
+        echo ""
+        print_divider
+        print_table_row "Window Class" "Workspace" "Size" "Title"
+        print_divider
+        
+        while IFS= read -r line; do
+            # Extract data from layout file
+            class=$(echo "$line" | grep -o 'class=[^ ]*' | cut -d= -f2)
+            workspace=$(echo "$line" | grep -o 'workspace=[^ ]*' | cut -d= -f2)
+            size=$(echo "$line" | grep -o 'size=[^ ]*' | cut -d= -f2)
+            title_raw=$(echo "$line" | grep -o 'title=.*command=' | sed 's/title=//; s/ command=$//')
+            title=$(eval echo "$title_raw")
+            
+            # Truncate title if too long
+            if [ ${#title} -gt 38 ]; then
+                title="${title:0:35}..."
+            fi
+            
+            print_table_row "$class" "$workspace" "$size" "$title"
+        done < "$SAVE_FILE_GNOME"
+        
+        print_divider
+        echo ""
+    else
+        echo ""
+        echo "No GNOME layout saved"
+        echo ""
+    fi
 }
 
 # Main execution starts here
+
+# Load config first
+load_config
+
 # If no arguments provided, show help
 if [ $# -eq 0 ]; then
     show_help
@@ -377,7 +688,7 @@ fi
 
 # Process command line arguments
 case "$1" in
-    --save)
+    --save|-s)
         env=$(detect_environment)
         case "$env" in
             hyprland)
@@ -392,7 +703,7 @@ case "$1" in
                 ;;
         esac
         ;;
-    --load)
+    --restore|--load|-r)
         env=$(detect_environment)
         case "$env" in
             hyprland)
@@ -407,8 +718,21 @@ case "$1" in
                 ;;
         esac
         ;;
-    --list)
-        list_layouts
+    --list|-l)
+        # Check for --all/-a flag
+        if [[ "$2" == "--all" || "$2" == "-a" ]]; then
+            list_layouts_detailed
+        else
+            list_layouts_basic
+        fi
+        ;;
+    --config)
+        # Check if help is requested or config is invalid
+        if [[ "$2" == "--help" || "$2" == "-h" || ( -n "$2" && "$2" != "--help" && "$2" != "-h" ) ]]; then
+            show_config_help
+        else
+            edit_config
+        fi
         ;;
     --version|-v)
         show_version
